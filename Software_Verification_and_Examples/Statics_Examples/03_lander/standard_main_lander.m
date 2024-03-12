@@ -1,23 +1,7 @@
  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%Static calculation of a tensegrity tower %%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% /* This Source Code Form is subject to the terms of the Mozilla Public
-% * License, v. 2.0. If a copy of the MPL was not distributed with this
-% * file, You can obtain one at http://mozilla.org/MPL/2.0/.
-%
-% Steps of static calculation:
-% 1.Specify material properties
-% 2.Manual nodal position, connectivity specification
-% 3.Boundary pinned nodes
-% 4.Group of elements
-% 5.Prestress design
-% 6.Cross sectional area design
-% 7.Generate input file of ANSYS (optional)
-% 8.Mass matrix and damping matrix and Modal analysis (optional)
-% 9.External force, forced motion of nodes, shrink of strings
-% 10.Equilibrium calculation
-% 11. Plot and make video, output data to TECPLOT(optional)
-%%
+
 clc;clear;close all;
 % Specify material properties
 [consti_data,Eb,Es,sigmab,sigmas,rho_b,rho_s]=material_lib('PLA','Ninja-Flex');
@@ -43,17 +27,45 @@ savePath=fullfile(fileparts(mfilename('fullpath')),'data_temp'); %Save files in 
 L = 1.45;
 th1 = -atan(1/2);
 N = [
-    0.3625 0 0;             0.3625 0 1.45;           -0.3625 0 0;            -0.3625 0 1.45;
+%% Stage-one
+0.3625 0 0;             0.3625 0 1.45;           -0.3625 0 0;            -0.3625 0 1.45;
 0 -0.7250 1.0875;       0 0.7250 1.0875;          0 -0.7250 0.3625;       0 0.7250 0.3625;
 0.7250 -0.3625 0.7250; -0.7250 -0.3625 0.7250;    0.7250 0.3625 0.7250;  -0.7250 0.3625 0.7250;
-    ]';
+
+%% Stage-two
+1.1065 -0.7309 0.7459;  1.1065 -0.7309 2.1959;   0.3815 -0.7309 0.7459;   0.3815 -0.7309 2.1959;
+0.7440 -1.4559 1.8334;  0.7440 -0.0059 1.8334;   0.7440 -1.4559 1.1084;   0.7440 -0.0059 1.1084;
+1.4690 -1.0934 1.4709;  0.0190 -1.0934 1.4709;   1.4690 -0.3684 1.4709;   0.0190 -0.3684 1.4709;
+
+%% Stage-three
+1.8553 -1.4682 1.4952; 1.8553 -1.4682 2.9452; 1.1303 -1.4682 1.4952; 1.1303 -1.4682 2.9425;
+1.4925 -2.1932 2.5827; 1.4925 -0.7432 2.5827; 1.4925 -2.1932 1.8577; 1.4925 -0.7432 1.8577;
+2.2178 -1.8307 2.2202; 0.7678 -1.8307 2.2202; 2.2178 -1.1057 2.2202; 0.7678 -1.1057 2.2202
+]';
 N = [1 0 0;0 cos(th1) -sin(th1);0 sin(th1) cos(th1)]*N;
 N(3,:)=N(3,:)+2;
 % N = [cos(th2) -sin(th2) 0;sin(th2) cos(th2) 0;0 0 1]*N;
-C_b_in = [1 2;3 4;5 6;7 8;9 10;11 12];
-C_s_in = [2 5;2 6;2 9;2 11;4 5;4 6;4 10;4 12;
-    1 7;1 8;1 9;1 11;3 7;3 8;3 10;3 12;
-    5 9;5 10;7 9;7 10;6 11;6 12;8 11;8 12];
+C_b_in = [
+          1 2;3 4;5 6;7 8;9 10;11 12;
+          13 14;15 16;17 18;19 20;21 22;23 24;
+          25 26;27 28;29 30;31 32;33 34;35 36
+          ];
+
+C_s_in = [
+ 2 6;2 11;4 5;4 6;4 10;4 12;
+ 1 7;1 8;1 9;1 11;3 7;3 8;3 10;3 12;
+ 5 10;7 9;7 10;6 11;6 12;8 11;8 12;
+ 2 20;2 24;9 20;9 15;5 15;5 24;
+ %%
+ 14 18;14 23;16 17;16 18;16 22;
+ 16 24;13 19;13 20;13 21;13 23;15 19;15 22;
+ 17 22;19 21;19 22;18 23;18 24;20 23;
+ 14 32;14 36;21 32;21 27;17 27;17 36;
+ %% 
+ 26 30;26 35;26 29;26 33;28 29;28 30;28 34;28 36;25 31;
+ 25 32;25 33;25 35;27 31;27 34;29 33;29 34;
+ 31 33;31 34;30 35;30 36;32 35
+];
 % Convert the above matrices into full connectivity matrices.
 C_b = tenseg_ind2C(C_b_in,N);%%
 C_s = tenseg_ind2C(C_s_in,N);
@@ -77,14 +89,14 @@ Gp=tenseg_str_gp(gr,C);    % generate group matrix
 [A_1a,A_1ag,A_2a,A_2ag,l,l_gp]=tenseg_equilibrium_matrix1(N,C,Gp,Ia);
 
 %SVD of equilibrium matrix
-[U1,U2,V1,V2,S]=tenseg_svd(A_1ag);
+[U1,U2,V1,V2,S]=tensegL_svd(A_1ag);
 
 %external force in equilibrium design
 w0=zeros(numel(N),1); w0a=Ia'*w0;
 
 %prestress design
 index_gp=1;                   % number of groups with designed force
-fd=-1e5;                        % force in bar is given as -1000
+fd=-1e6;                        % force in bar is given as -1000
 [q_gp,t_gp,q,t]=tenseg_prestress_design(Gp,l,l_gp,A_1ag,V2,w0a,index_gp,fd);    %prestress design
 
 %% cross sectional design
@@ -107,7 +119,7 @@ D=d*2*max(sqrt(mass.*E.*A./l0))*eye(3*nn); % critical damping
 
 %% mode analysis
 num_plt=7:9; % mode index to plot
-%[V_mode,omega]=tenseg_mode(Ia,C,C_b,C_s,N(:),E,A,l0,M,num_plt,saveimg);
+[V_mode,omega]=tenseg_mode(Ia,C,C_b,C_s,N(:),E,A,l0,M,num_plt,saveimg);
 
 %% external force, forced motion of nodes, shrink of strings
 % calculate external force and
@@ -141,10 +153,10 @@ n_t=data_out.n_out;          %nodal coordinate in every step
 N_out=data_out.N_out;
 
 %% plot member force
-% tenseg_plot_result(1:substep,t_t(1:3,:),{'element 1','element 2','element 3'},{'Load step','Force (N)'},fullfile(savePath,'plot_member_force.png'),saveimg);
+tenseg_plot_result(1:substep,t_t(1:3,:),{'element 1','element 2','element 3'},{'Load step','Force (N)'},fullfile(savePath,'plot_member_force.png'),saveimg);
 
 %% Plot nodal coordinate curve X Y
-% tenseg_plot_result(1:substep,n_t([3*4-2,3*4],:),{'4X','4Z'},{'Time (s)','Coordinate (m)'},fullfile(savePath,'plot_coordinate.png'),saveimg);
+tenseg_plot_result(1:substep,n_t([3*4-2,3*4],:),{'4X','4Z'},{'Time (s)','Coordinate (m)'},fullfile(savePath,'plot_coordinate.png'),saveimg);
 
 %% Plot final configuration
 % tenseg_plot_catenary(reshape(n_t(:,end),3,[]),C_b,C_s,[],[],[0,0],[],R3Ddata,l0_t(index_s,end));
@@ -157,7 +169,7 @@ end
 %% make video of the dynamic
 name=fullfile(savePath,['lander',material{1},num2str(material{2})]);
 % tenseg_video(n_t,C_b,C_s,[],substep,name,savevideo);
-% tenseg_video_slack(n_t,C_b,C_s,l0_t,index_s,[],[],[],min(substep,50),name,savevideo,material{2});
+tenseg_video_slack(n_t,C_b,C_s,l0_t,index_s,[],[],[],min(substep,50),name,savevideo,material{2});
 
 %% linearized dynaimcs
-% [A_lin,B_lin]=tenseg_lin_mtrx(C,N(:),E,A,l0,M,D,Ia,A_1a);
+[A_lin,B_lin]=tenseg_lin_mtrx(C,N(:),E,A,l0,M,D,Ia,A_1a);
